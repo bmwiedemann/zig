@@ -22,21 +22,23 @@ wasi_exec_model: std.builtin.WasiExecModel,
 /// Compute an abstract hash representing this `Builtin`. This is *not* a hash
 /// of the resulting file contents.
 pub fn hash(opts: @This()) [std.Build.Cache.bin_digest_len]u8 {
-    var h: Cache.Hasher = Cache.hasher_init;
+    var hh: Cache.HashHelper = .{};
     inline for (@typeInfo(@This()).@"struct".fields) |f| {
         if (comptime std.mem.eql(u8, f.name, "target")) {
-            // This needs special handling.
-            std.hash.autoHash(&h, opts.target.cpu);
-            std.hash.autoHash(&h, opts.target.os.tag);
-            std.hash.autoHash(&h, opts.target.os.versionRange());
-            std.hash.autoHash(&h, opts.target.abi);
-            std.hash.autoHash(&h, opts.target.ofmt);
-            std.hash.autoHash(&h, opts.target.dynamic_linker);
+            // This needs special handling; hash the target the same way `addResolvedTarget` does.
+            hh.add(opts.target.cpu.arch);
+            hh.addBytes(opts.target.cpu.model.name);
+            hh.add(opts.target.cpu.features.ints);
+            hh.add(opts.target.os.tag);
+            hh.add(opts.target.os.versionRange());
+            hh.add(opts.target.abi);
+            hh.add(opts.target.ofmt);
+            hh.addOptionalBytes(opts.target.dynamic_linker.get());
         } else {
-            std.hash.autoHash(&h, @field(opts, f.name));
+            hh.add(@field(opts, f.name));
         }
     }
-    return h.finalResult();
+    return hh.peekBin();
 }
 
 pub fn generate(opts: @This(), allocator: Allocator) Allocator.Error![:0]u8 {
